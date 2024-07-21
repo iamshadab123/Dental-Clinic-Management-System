@@ -1,6 +1,6 @@
 # Dental-Clinic-Management-System
 
-##Overview
+## Overview
 This project involves a SQL-based database designed to efficiently organize and manage the operations of a dental clinic with three distinct departments. The database structure supports all clinical features necessary for effective clinic management.
 
 ## Features
