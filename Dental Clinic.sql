@@ -118,6 +118,7 @@ GROUP BY patient_name, patient_id
 HAVING COUNT(DISTINCT Final_Details) > 1;
 
 -- Create a table to store visit information based on registration criteria
+-- Populate it with the results of a SELECT query.
 CREATE TABLE VISITS AS (
     SELECT patient_name, patient_id, registration_time, registration_date,
     CASE
