@@ -17,7 +17,12 @@ FROM insurance
 GROUP BY insurance_id
 HAVING COUNT(DISTINCT company_name) > 1;
 
--- Create an index on the company_name column for faster searches
+-- (Concept of Indexing)
+-- Creates an index named Insurance_Company_Name on the company_name column of the Insurance table. 
+-- This index speeds up queries that search or filter based on company_name by allowing the database to quickly locate rows.
+-- ABC Insurance -> [Row 1, Row 3]
+-- DEF Insurance -> [Row 4]
+-- XYZ Insurance -> [Row 2, Row 5]
 CREATE INDEX Insurance_Company_Name
 ON Insurance (company_name);
 
@@ -59,6 +64,8 @@ CREATE TABLE patient1 (
     FOREIGN KEY (doc_id) REFERENCES doctor_info(doc_id) -- Establish foreign key relationship
 );
 
+-- When you insert, update, or delete a large number of rows in a table that has foreign key constraints, 
+-- MySQL will normally check each operation to ensure that it does not violate the foreign key constraints. This can slow down the operation significantly.
 -- Disable foreign key checks temporarily for bulk insert operations
 SET FOREIGN_KEY_CHECKS=0;
 
@@ -73,6 +80,9 @@ INSERT INTO patient1 VALUES
 (4, 'Dental Polyclinic', 'Mr.Ramesh', '1983-08-21', 104, 'M', 'Cavities', 3, 400, '21:00:00', '2022-03-19'),
 (5, 'Dental Polyclinic', 'Ms.Khushi', '1998-01-16', 105, 'F', 'Missing Teeth', 3, 400, '17:00:00', '2022-03-20'),
 (6, 'Dental Polyclinic', 'Ms.Franceska', '2000-03-19', 106, 'F', 'Mobile Teeth', 3, 500, '18:00:00', '2022-03-19');
+
+-- Re-enable foreign key checks
+SET FOREIGN_KEY_CHECKS=1;
 
 -- Retrieve all records from the patient1 table
 SELECT * FROM patient1;
@@ -105,7 +115,9 @@ DESC patient_phone;
 -- Retrieve all records from the patient_phone table
 SELECT * FROM patient_phone;
 
--- Update co-insurance for patients with insurance that has expired before their registration date
+-- Update the co-insurance percentage for insurance policies that have expired before the patient’s registration date in clinic
+-- This query updates the co_insurance to 0 for policies that have expired before the patient registered,
+-- meaning that the expired insurance no longer contributes to coverage and the patient will be responsible for the full charge.
 UPDATE INSURANCE
 JOIN PATIENT1
 ON PATIENT1.INSURANCE_ID = INSURANCE.INSURANCE_ID AND INSURANCE.END_DATE < PATIENT1.REGISTRATION_DATE
@@ -120,14 +132,16 @@ HAVING COUNT(DISTINCT Final_Details) > 1;
 -- Create a table to store visit information based on registration criteria
 -- Populate it with the results of a SELECT query.
 CREATE TABLE VISITS AS (
+    -- Select the columns to be included in the new table
     SELECT patient_name, patient_id, registration_time, registration_date,
+    -- Compute a new column 'Final_Details' based on the value of 'registration_time' and 'registration_date'
     CASE
         WHEN registration_time < '16:00:00' THEN 'SORRY ! COME WITHIN THE SPECIFIED TIMINGS'
         WHEN registration_time > '20:30:00' THEN 'SORRY ! COME WITHIN THE SPECIFIED TIMINGS'
         WHEN DAYNAME(registration_date) NOT IN ('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY') THEN
             'SORRY ! WE ARE OPEN ONLY FROM MONDAY-SATURDAY'
         ELSE 'REGISTRATION CAN BE DONE'
-    END AS Final_Details
+    END AS Final_Details    -- Alias the computed column as 'Final_Details'
     FROM patient1
 );
 
@@ -177,10 +191,11 @@ SELECT * FROM previous_visits;
 DESC previous_visits;
 
 -- Create a table for new patients who have no previous visits
+-- Create this new table 'new_patients' based on the data from 'patient1'
 CREATE TABLE new_patients AS (
-    SELECT patient_id, patient_name, insurance_id 
+    SELECT patient_id, patient_name, insurance_id     -- Select relevant columns from 'patient1'
     FROM patient1 
-    WHERE NOT EXISTS (
+    WHERE NOT EXISTS (        -- Include only those patients who are not present in the 'previous_visits' table
         SELECT patient_id 
         FROM previous_visits 
         WHERE patient1.patient_id = previous_visits.patient_id
@@ -208,10 +223,11 @@ SELECT * FROM new_patients;
 DESCRIBE new_patients;
 
 -- Create a table for regular patients who have had at least two previous visits
+-- Create this new table 'regular_patients' based on the data from 'patient1'
 CREATE TABLE regular_patients AS
-SELECT patient_id, patient_name, insurance_id
-FROM patient1
-WHERE patient_id IN (
+SELECT patient_id, patient_name, insurance_id        -- Select relevant columns from 'patient1'
+FROM patient1                    -- Include only those patients whose IDs are present in the subquery results
+WHERE patient_id IN (            -- Subquery to find patients with at least 2 visits
     SELECT patient_id
     FROM previous_visits
     GROUP BY patient_id
@@ -379,11 +395,12 @@ SELECT * FROM gen_dentist;
 -- Describe the structure of the gen_dentist table
 DESC gen_dentist;
 
--- Create a table to calculate total bills for patients
+-- Create new table 'TOTAL_BILL' based on the calculated charges from different conditions
 CREATE TABLE TOTAL_BILL AS (
+    -- Select relevant columns along with calculated charges
     SELECT Patient_id, insurance_id, patient_name,
     CASE
-        WHEN (patient1.doc_id=100 AND Dno=1) THEN (SELECT charges FROM endodontist WHERE doc_id=100)
+        WHEN (patient1.doc_id=100 AND Dno=1) THEN (SELECT charges FROM endodontist WHERE doc_id=100)    -- If doc_id is 100 and Dno is 1, retrieve the charges from the 'endodontist' table for doc_id 100
         WHEN (patient1.doc_id=200 AND Dno=1) THEN (SELECT charges FROM endodontist WHERE doc_id=200)
         WHEN (patient1.doc_id=300 AND Dno=2) THEN (SELECT price FROM periodontist WHERE doc_id=300)
         WHEN (patient1.doc_id=400 AND Dno=3 AND Problem_or_Disease LIKE 'Cavities') THEN (SELECT price FROM gen_dentist WHERE (doc_id=400 AND cavities_OR_missing_teeth_OR_mobile_teeth LIKE 'Cavities'))
@@ -393,8 +410,8 @@ CREATE TABLE TOTAL_BILL AS (
         WHEN (doc_id=500 AND Dno=3 AND Problem_or_Disease LIKE 'Missing Teeth') THEN (SELECT price FROM gen_dentist WHERE (doc_id=500 AND cavities_OR_missing_teeth_OR_mobile_teeth LIKE 'Missing Teeth'))
         WHEN (doc_id=500 AND Dno=3 AND Problem_or_Disease LIKE 'Mobile Teeth') THEN (SELECT price FROM gen_dentist WHERE (doc_id=500 AND cavities_OR_missing_teeth_OR_mobile_teeth LIKE 'Mobile Teeth'))
         ELSE 0 -- Default case if no conditions are met
-    END AS charges
-    FROM patient1
+    END AS charges    -- Finalizes the CASE statement and assigns the calculated value to the 'charges' column, this column represents the total charges based on the specified conditions
+    FROM patient1     -- Source table for patient data
 );
 
 -- Retrieve all records from the total_bill table
@@ -445,10 +462,13 @@ SELECT * FROM total_bill;
 -- Add a column for patient payment amount in the total_bill table
 ALTER TABLE total_bill ADD Patient_Pay INTEGER NOT NULL;
 
--- Update the total_bill table to calculate the amount the patient needs to pay
+-- Update the total_bill table to calculate insurance coverage amount
 UPDATE total_bill e
-INNER JOIN insurance i ON e.insurance_id = i.insurance_id
-SET patient_pay = (charge_after_discount) - money_insurance; -- Calculate patient payment
+INNER JOIN insurance i ON e.insurance_id = i.insurance_id -- Join total_bill table with insurance table based on insurance_id
+SET e.Money_insurance = CASE
+    WHEN i.co_insurance = 0 THEN 0 -- If co-insurance is 0%, set Money_insurance to 0
+    ELSE (e.charge_after_discount * i.co_insurance / 100.00) -- Otherwise, calculate the insurance amount
+END;
 
 -- Describe the structure of the total_bill table
 DESC total_bill;
