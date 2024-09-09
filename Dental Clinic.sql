@@ -613,9 +613,10 @@ SELECT
     salary, 
     phone_number 
 FROM 
-    cashier, 
+    cashier
+INNER JOIN 
     cashier_phone 
-WHERE 
+ON 
     cashier.cashier_id = cashier_phone.cashier_id;
 
 -- Left outer join to include cashiers without phone numbers
